@@ -23,7 +23,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src.config import Config, get_config
 from src.utils import set_seed, setup_logging, init_wandb
-from src.data.load_data import preprocess_data
+from src.dataset.load_data import preprocess_data
 from src.models.sklearn_models import get_sklearn_model
 
 

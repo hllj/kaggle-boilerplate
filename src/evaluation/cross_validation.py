@@ -18,8 +18,8 @@ import wandb
 from omegaconf import OmegaConf
 
 from src.config import Config
-from src.data.load_data import create_kfold_dataloaders, preprocess_data
-from src.data.feature_engineering import feature_engineering_pipeline
+from src.dataset.load_data import create_kfold_dataloaders, preprocess_data
+from src.dataset.feature_engineering import feature_engineering_pipeline
 from src.models.model import get_model
 from src.models.train import (
     get_loss_fn, get_optimizer, get_scheduler, train_epoch, validate
