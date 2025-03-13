@@ -1,0 +1,92 @@
+# Configuration for scikit-learn models
+
+# Inherit from the default configuration
+defaults:
+  - default
+
+# Override the training framework
+training:
+  framework: sklearn
+  use_cv: true  # Use cross-validation
+
+# Model configurations
+model:
+  # Example 1: Random Forest Classifier
+  name: rf_classifier
+  class: tree
+  type: random_forest_classifier
+  n_estimators: 100
+  max_depth: 10
+  min_samples_split: 2
+  min_samples_leaf: 1
+  criterion: gini
+  random_state: ${seed}
+  n_jobs: -1
+
+  # Example 2: Gradient Boosting Regressor (commented out)
+  # name: gb_regressor
+  # class: tree
+  # type: gradient_boosting_regressor
+  # n_estimators: 100
+  # learning_rate: 0.1
+  # max_depth: 3
+  # subsample: 0.8
+  # random_state: ${seed}
+
+  # Example 3: XGBoost Classifier (commented out)
+  # name: xgb_classifier
+  # class: boosting
+  # type: xgboost_classifier
+  # n_estimators: 100
+  # learning_rate: 0.1
+  # max_depth: 6
+  # subsample: 0.8
+  # colsample_bytree: 0.8
+  # reg_alpha: 0
+  # reg_lambda: 1
+  # random_state: ${seed}
+  # n_jobs: -1
+
+  # Example 4: Logistic Regression (commented out)
+  # name: logistic
+  # class: linear
+  # type: logistic
+  # C: 1.0
+  # penalty: l2
+  # solver: liblinear
+  # max_iter: 1000
+  # random_state: ${seed}
+
+  # Example 5: Stacking Classifier (commented out)
+  # name: stacking
+  # class: ensemble
+  # type: stacking_classifier
+  # estimators:
+  #   - name: rf
+  #     type: tree
+  #     params:
+  #       type: random_forest_classifier
+  #       n_estimators: 100
+  #       max_depth: 10
+  #   - name: xgb
+  #     type: boosting
+  #     params:
+  #       type: xgboost_classifier
+  #       n_estimators: 100
+  #       max_depth: 6
+  #   - name: log_reg
+  #     type: linear
+  #     params:
+  #       type: logistic
+  #       C: 1.0
+  # cv: 5
+  # n_jobs: -1
+
+# Inference configurations for scikit-learn models
+inference:
+  prediction_type: proba  # 'proba' or 'class'/'value'
+
+# Data
+data:
+  features:
+    categorical_indices: []  # Indices of categorical features for special handling in some models 

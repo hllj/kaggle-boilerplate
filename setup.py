@@ -1,0 +1,38 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="pytorch_kaggle_boilerplate",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=[
+        "torch>=2.0.0",
+        "torchvision>=0.15.0",
+        "pytorch-lightning>=2.0.0",
+        "transformers>=4.28.0",
+        "wandb>=0.15.0",
+        "hydra-core>=1.3.2",
+        "numpy>=1.24.0",
+        "pandas>=2.0.0",
+        "scikit-learn>=1.2.0",
+        "matplotlib>=3.7.0",
+        "seaborn>=0.12.0",
+        "tqdm>=4.65.0",
+        "kaggle>=1.5.13",
+    ],
+    python_requires=">=3.8",
+    author="Your Name",
+    author_email="your.email@example.com",
+    description="A PyTorch boilerplate for Kaggle competitions",
+    keywords="pytorch, kaggle, machine learning, deep learning",
+    url="https://github.com/yourusername/pytorch-kaggle-boilerplate",
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    ],
+) 
