@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
+import timm
 from transformers import AutoModel
 
 from src.config import Config
@@ -404,9 +405,87 @@ class TabNetModel(nn.Module):
         return out
 
 
+class GeM(nn.Module):
+    """
+    Generalized Mean Pooling layer.
+    
+    Attributes:
+        p: Pooling parameter (learnable)
+        eps: Small value to prevent numerical issues
+    """
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x):
+        bs, ch, h, w = x.shape
+        x = F.avg_pool2d(x.clamp(min=self.eps).pow(self.p), (x.size(-2), x.size(-1))).pow(
+            1.0 / self.p)
+        x = x.view(bs, ch)
+        return x
+
+
+class BirdCLEFModel(nn.Module):
+    """
+    CNN model with backbone from timm and GeM pooling for BirdCLEF competition.
+    
+    Attributes:
+        backbone: CNN backbone from timm
+        global_pools: Pooling layers
+        neck: Batch normalization layer
+        head: Fully connected head
+    """
+    def __init__(self, 
+                 num_classes: int, 
+                 backbone: str = 'eca_nfnet_l0', 
+                 pretrained: bool = True):
+        """
+        Initialize BirdCLEFModel.
+        
+        Args:
+            num_classes: Number of output classes
+            backbone: Backbone model name from timm
+            pretrained: Whether to use pretrained weights
+        """
+        super().__init__()
+
+        out_indices = (3, 4)
+        self.backbone = timm.create_model(
+            backbone,
+            features_only=True,
+            pretrained=pretrained,
+            in_chans=3,
+            num_classes=num_classes,
+            out_indices=out_indices,
+        )
+        feature_dims = self.backbone.feature_info.channels()
+
+        self.global_pools = nn.ModuleList([GeM() for _ in out_indices])
+        self.mid_features = sum(feature_dims)
+        self.neck = nn.BatchNorm1d(self.mid_features)
+        self.head = nn.Linear(self.mid_features, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass.
+        
+        Args:
+            x: Input tensor (spectrograms)
+            
+        Returns:
+            Output logits
+        """
+        ms = self.backbone(x)
+        h = torch.cat([global_pool(m) for m, global_pool in zip(ms, self.global_pools)], dim=1)
+        x = self.neck(h)
+        x = self.head(x)
+        return x
+
+
 def get_model(cfg: Config) -> nn.Module:
     """
-    Factory function to get model based on configuration.
+    Get model based on configuration.
     
     Args:
         cfg: Configuration
@@ -414,45 +493,38 @@ def get_model(cfg: Config) -> nn.Module:
     Returns:
         PyTorch model
     """
-    model_name = cfg.model.name
+    model_name = cfg.model.name.lower()
     
     if model_name == 'tabular_mlp':
-        # For tabular data
-        model = TabularMLP(
-            input_dim=cfg.model.get('input_dim', 10),
-            hidden_dims=cfg.model.get('hidden_dims', [256, 128, 64]),
+        return TabularMLP(
+            input_dim=cfg.model.input_dim,
+            hidden_dims=[cfg.model.hidden_dim] * 3,
             output_dim=cfg.model.num_classes,
-            dropout=cfg.model.dropout,
-            batch_norm=cfg.model.get('batch_norm', True),
-            activation=cfg.model.get('activation', 'relu')
+            dropout=cfg.model.dropout
         )
     elif model_name == 'resnet':
-        # For image classification
-        model = ResNetClassifier(
+        return ResNetClassifier(
             num_classes=cfg.model.num_classes,
             backbone=cfg.model.backbone,
             pretrained=cfg.model.pretrained,
             dropout=cfg.model.dropout
         )
     elif model_name == 'transformer':
-        # For text classification
-        model = TransformerTextClassifier(
-            model_name=cfg.model.get('transformer_name', 'bert-base-uncased'),
+        return TransformerTextClassifier(
+            model_name=cfg.model.backbone,
             num_classes=cfg.model.num_classes,
-            dropout=cfg.model.dropout,
-            freeze_base=cfg.model.get('freeze_base', False)
+            dropout=cfg.model.dropout
         )
     elif model_name == 'tabnet':
-        # TabNet for tabular data
-        model = TabNetModel(
-            input_dim=cfg.model.get('input_dim', 10),
-            output_dim=cfg.model.num_classes,
-            n_d=cfg.model.get('n_d', 64),
-            n_a=cfg.model.get('n_a', 64),
-            n_steps=cfg.model.get('n_steps', 3),
-            gamma=cfg.model.get('gamma', 1.3)
+        return TabNetModel(
+            input_dim=cfg.model.input_dim,
+            output_dim=cfg.model.num_classes
+        )
+    elif model_name == 'birdclef':
+        return BirdCLEFModel(
+            num_classes=cfg.model.num_classes,
+            backbone=cfg.model.backbone,
+            pretrained=cfg.model.pretrained
         )
     else:
-        raise ValueError(f"Model {model_name} not supported")
-    
-    return model 
+        raise ValueError(f"Model {model_name} not supported") 

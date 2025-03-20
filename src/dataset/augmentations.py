@@ -9,6 +9,9 @@ from torch.utils.data import Dataset
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from sklearn.utils import resample
+import random
+import torchaudio
+from albumentations.core.transforms_interface import ImageOnlyTransform
 
 
 class ImageTransforms:
@@ -429,3 +432,196 @@ class AugmentedDataset(Dataset):
                 item = self.transform(item)
         
         return item 
+
+
+def get_transforms(cfg, image_size=None, is_train=True):
+    """
+    Get transforms for images based on config.
+    
+    Args:
+        cfg: Configuration
+        image_size: Image size (optional, overrides config)
+        is_train: Whether to get transforms for training or validation
+        
+    Returns:
+        Albumentation transforms
+    """
+    if image_size is None:
+        image_size = cfg.augmentation.image_size
+    
+    if is_train:
+        return A.Compose([
+            A.HorizontalFlip(p=0.5),
+            A.Resize(image_size, image_size),
+            A.CoarseDropout(max_height=int(image_size * 0.375), max_width=int(image_size * 0.375), max_holes=1, p=0.7),
+            A.Normalize()
+        ])
+    else:
+        return A.Compose([
+            A.Resize(image_size, image_size),
+            A.Normalize()
+        ])
+
+
+def normalize_melspec(X, eps=1e-6):
+    """
+    Normalize mel spectrogram.
+    
+    Args:
+        X: Mel spectrogram tensor
+        eps: Small value to prevent division by zero
+        
+    Returns:
+        Normalized mel spectrogram
+    """
+    mean = X.mean((1, 2), keepdim=True)
+    std = X.std((1, 2), keepdim=True)
+    Xstd = (X - mean) / (std + eps)
+
+    norm_min, norm_max = (
+        Xstd.min(-1)[0].min(-1)[0],
+        Xstd.max(-1)[0].max(-1)[0],
+    )
+    fix_ind = (norm_max - norm_min) > eps * torch.ones_like(
+        (norm_max - norm_min)
+    )
+    V = torch.zeros_like(Xstd)
+    if fix_ind.sum():
+        V_fix = Xstd[fix_ind]
+        norm_max_fix = norm_max[fix_ind, None, None]
+        norm_min_fix = norm_min[fix_ind, None, None]
+        V_fix = torch.max(
+            torch.min(V_fix, norm_max_fix),
+            norm_min_fix,
+        )
+        V_fix = (V_fix - norm_min_fix) / (norm_max_fix - norm_min_fix)
+        V[fix_ind] = V_fix
+    return V
+
+
+def mixup(data, targets, alpha=0.5):
+    """
+    Perform mixup augmentation.
+    
+    Args:
+        data: Batch data
+        targets: Batch targets
+        alpha: Mixup parameter
+        
+    Returns:
+        Mixed data and targets
+    """
+    indices = torch.randperm(data.size(0))
+    data2 = data[indices]
+    targets2 = targets[indices]
+
+    lam = torch.FloatTensor([np.random.beta(alpha, alpha)])
+    data = data * lam + data2 * (1 - lam)
+    targets = targets * lam + targets2 * (1 - lam)
+
+    return data, targets
+
+
+def read_wav(path, sample_rate=32000):
+    """
+    Read and normalize a wav file.
+    
+    Args:
+        path: Path to wav file
+        sample_rate: Target sample rate
+        
+    Returns:
+        Normalized audio tensor
+    """
+    wav, org_sr = torchaudio.load(path, normalize=True)
+    wav = torchaudio.functional.resample(wav, orig_freq=org_sr, new_freq=sample_rate)
+    return wav
+
+
+def crop_or_pad_wav(wav, duration):
+    """
+    Crop or pad wav to desired duration.
+    
+    Args:
+        wav: Audio tensor
+        duration: Target duration in samples
+        
+    Returns:
+        Audio tensor of length duration
+    """
+    while wav.size(-1) < duration:
+        wav = torch.cat([wav, wav], dim=1)
+    wav = wav[:, :duration]
+    return wav
+
+
+class TimeShift(ImageOnlyTransform):
+    """
+    Time shifting augmentation for spectrograms.
+    
+    Attributes:
+        p: Probability of applying the transform
+        max_shift_x: Maximum shift in x direction (time)
+    """
+    
+    def __init__(self, max_shift_x=20, always_apply=False, p=0.5):
+        super(TimeShift, self).__init__(always_apply, p)
+        self.max_shift_x = max_shift_x
+        
+    def apply(self, img, **params):
+        shift_x = random.randint(-self.max_shift_x, self.max_shift_x)
+        if shift_x > 0:
+            img = np.roll(img, shift_x, axis=1)
+            img[:, :shift_x, :] = 0
+        elif shift_x < 0:
+            img = np.roll(img, shift_x, axis=1)
+            img[:, shift_x:, :] = 0
+        return img
+
+
+class FrequencyMask(ImageOnlyTransform):
+    """
+    Frequency masking augmentation for spectrograms.
+    
+    Attributes:
+        p: Probability of applying the transform
+        max_width: Maximum mask width
+        num_masks: Number of masks to apply
+    """
+    
+    def __init__(self, max_width=10, num_masks=1, always_apply=False, p=0.5):
+        super(FrequencyMask, self).__init__(always_apply, p)
+        self.max_width = max_width
+        self.num_masks = num_masks
+        
+    def apply(self, img, **params):
+        height = img.shape[0]
+        for _ in range(self.num_masks):
+            width = random.randint(1, self.max_width)
+            start = random.randint(0, height - width)
+            img[start:start+width, :, :] = 0
+        return img
+
+
+class TimeMask(ImageOnlyTransform):
+    """
+    Time masking augmentation for spectrograms.
+    
+    Attributes:
+        p: Probability of applying the transform
+        max_width: Maximum mask width
+        num_masks: Number of masks to apply
+    """
+    
+    def __init__(self, max_width=10, num_masks=1, always_apply=False, p=0.5):
+        super(TimeMask, self).__init__(always_apply, p)
+        self.max_width = max_width
+        self.num_masks = num_masks
+        
+    def apply(self, img, **params):
+        width = img.shape[1]
+        for _ in range(self.num_masks):
+            mask_width = random.randint(1, self.max_width)
+            start = random.randint(0, width - mask_width)
+            img[:, start:start+mask_width, :] = 0
+        return img 

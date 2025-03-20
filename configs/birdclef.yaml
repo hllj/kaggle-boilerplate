@@ -1,0 +1,103 @@
+# Default configuration for Kaggle competition
+
+# Paths
+paths:
+  data_dir: ${oc.env:DATA_DIR,data}
+  raw_data: ${paths.data_dir}/raw
+  processed_data: ${paths.data_dir}/processed
+  model_dir: models
+  log_dir: logs
+  submission_dir: submission
+
+# Data
+data:
+  train_file: ${paths.raw_data}/train.csv
+  test_file: ${paths.raw_data}/test.csv
+  sample_submission_file: ${paths.raw_data}/sample_submission.csv
+  target_column: target
+  features:
+    numerical: []  # List numerical feature columns
+    categorical: []  # List categorical feature columns
+  test_size: 0.2
+  random_state: 42
+  num_folds: 5  # For cross-validation
+
+# Preprocessing
+preprocessing:
+  handle_missing: true
+  scaling: standard  # Options: standard, minmax, robust, none
+  categorical_encoding: label  # Options: label, onehot, target, none
+  feature_selection:
+    enabled: false
+    method: mutual_info  # Options: mutual_info, chi2, f_value
+    k_features: 10
+
+# Augmentation
+augmentation:
+  enabled: false
+  methods: []  # List of augmentation methods
+
+# Training
+training:
+  framework: pytorch  # Options: pytorch, lightning, huggingface
+  optimizer:
+    name: adam  # Options: adam, sgd, adamw
+    lr: 0.001
+    weight_decay: 0.0001
+  scheduler:
+    name: cosine  # Options: cosine, step, plateau, none
+    patience: 5  # For plateau scheduler
+    factor: 0.5  # For plateau and step schedulers
+    step_size: 10  # For step scheduler
+  batch_size: 32
+  num_epochs: 10
+  early_stopping:
+    enabled: true
+    patience: 5
+    min_delta: 0.001
+  gradient_clipping:
+    enabled: false
+    max_norm: 1.0
+  mixed_precision: true
+
+# Model
+model:
+  name: baseline  # Replace with your model name
+  backbone: resnet50  # Replace with your backbone name if applicable
+  pretrained: true
+  dropout: 0.5
+  hidden_dim: 256
+  num_classes: 1  # Binary classification default, modify as needed
+
+# Evaluation
+evaluation:
+  metric: accuracy  # Options: accuracy, f1, auc, rmse, mae
+  monitor: val_loss  # Which metric to monitor for best model/early stopping
+
+# Logging
+logging:
+  wandb:
+    enabled: true
+    project: kaggle-competition
+    entity: null  # Replace with your wandb username/entity
+    tags: []
+  tensorboard:
+    enabled: true
+  console:
+    level: info  # Options: debug, info, warning, error
+
+# Inference
+inference:
+  batch_size: 64
+  tta: false  # Test-time augmentation
+  checkpoint: best  # Options: best, last
+  ensemble: false  # Whether to use ensemble of models
+
+# Resources
+resources:
+  num_workers: 4
+  device: cuda  # Options: cuda, cpu
+  pin_memory: true
+
+# Reproducibility
+seed: 42 
